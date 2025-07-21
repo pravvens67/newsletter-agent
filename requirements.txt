@@ -1,9 +1,8 @@
-streamlit==1.28.1
-google-api-python-client==2.100.0
-google-auth-httplib2==0.1.1
-google-auth-oauthlib==1.1.0
-pandas==2.1.1
-nltk==3.8.1
-beautifulsoup4==4.12.2
-html2text==2020.1.16
-python-dateutil==2.8.2
+streamlit
+google-api-python-client
+google-auth-oauthlib
+pandas
+nltk
+beautifulsoup4
+html2text
+python-dateutil
