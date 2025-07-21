@@ -1,4 +1,13 @@
+
 import streamlit as st
+import json
+# Write credentials.json from Streamlit secrets if running in Streamlit Cloud
+if "installed" in st.secrets:
+    with open("credentials.json", "w") as f:
+        json.dump(dict(st.secrets["installed"]), f)
+    creds_path = "credentials.json"
+else:
+    creds_path = "credentials.json"  # fallback for local run with physical file
 import imaplib
 import email
 from email.mime.text import MIMEText
