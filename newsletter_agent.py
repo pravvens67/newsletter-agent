@@ -1,14 +1,6 @@
 import streamlit as st
 import json
-
-# Write credentials.json from Streamlit secrets if running in Streamlit Cloud
-if "installed" in st.secrets:
-    with open("credentials.json", "w") as f:
-        json.dump(dict(st.secrets["installed"]), f)
-    creds_path = "credentials.json"
-else:
-    creds_path = "credentials.json"  # fallback for local run with physical file
-
+import os
 import imaplib
 import email
 from email.mime.text import MIMEText
@@ -24,7 +16,6 @@ from collections import Counter
 import html2text
 from bs4 import BeautifulSoup
 import base64
-import os
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -59,6 +50,15 @@ TOPIC_CATEGORIES = {
     'Food': ['food', 'recipe', 'cooking', 'restaurant', 'chef', 'cuisine', 'dining'],
     'Lifestyle': ['lifestyle', 'fashion', 'beauty', 'home', 'design', 'culture', 'art']
 }
+
+# Write credentials.json from Streamlit secrets if running in Streamlit Cloud
+CREDENTIALS_FILENAME = "credentials.json"
+if "installed" in st.secrets:
+    with open(CREDENTIALS_FILENAME, "w") as f:
+        json.dump({"installed": dict(st.secrets["installed"])}, f)
+    creds_path = CREDENTIALS_FILENAME
+else:
+    creds_path = CREDENTIALS_FILENAME  # fallback for local run
 
 class NewsletterAgent:
     def __init__(self):
@@ -101,7 +101,7 @@ class NewsletterAgent:
     def is_newsletter(self, message_data, headers):
         """Detect if email is a newsletter"""
         # Check headers for newsletter indicators
-        for indicator in NEWSLETTER_INDICATORS[:3]:  # <-- fixed missing colon here!
+        for indicator in NEWSLETTER_INDICATORS[:3]:  # Check RFC headers first
             if indicator in headers:
                 return True
 
