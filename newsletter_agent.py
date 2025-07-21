@@ -80,7 +80,8 @@ class NewsletterAgent:
                 else:
                     if os.path.exists(creds_path):
                         flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
-                        creds = flow.run_local_server(port=0)
+                        # CHANGE: use run_console instead of run_local_server!
+                        creds = flow.run_console()
                     else:
                         st.error("credentials.json file not found. Please upload your Gmail API credentials.")
                         return None
@@ -100,28 +101,20 @@ class NewsletterAgent:
 
     def is_newsletter(self, message_data, headers):
         """Detect if email is a newsletter"""
-        # Check headers for newsletter indicators
-        for indicator in NEWSLETTER_INDICATORS[:3]:  # Check RFC headers first
+        for indicator in NEWSLETTER_INDICATORS[:3]:
             if indicator in headers:
                 return True
-
-        # Check subject and body for newsletter patterns
         subject = headers.get('Subject', '').lower()
         for indicator in NEWSLETTER_INDICATORS[3:]:
             if indicator in subject:
                 return True
-
-        # Check for bulk mail patterns
         precedence = headers.get('Precedence', '').lower()
         if precedence in ['bulk', 'list']:
             return True
-
         return False
 
     def extract_text_content(self, msg):
-        """Extract clean text content from email"""
         text_content = ""
-
         if msg.is_multipart():
             for part in msg.walk():
                 if part.get_content_type() == "text/plain":
@@ -139,114 +132,74 @@ class NewsletterAgent:
                 h = html2text.HTML2Text()
                 h.ignore_links = True
                 text_content = h.handle(html_content)
-
         return text_content.strip()
 
     def summarize_textrank(self, text, max_sentences=3):
-        """Summarize using TextRank algorithm"""
         try:
             sentences = sent_tokenize(text)
             if len(sentences) <= max_sentences:
                 return ' '.join(sentences)
-
-            # Clean and tokenize sentences
             clean_sentences = []
             for sentence in sentences:
                 clean_sentence = re.sub(r'[^a-zA-Z0-9\s]', '', sentence.lower())
                 clean_sentences.append(clean_sentence)
-
-            # Calculate word frequencies
             words = word_tokenize(' '.join(clean_sentences))
             word_freq = Counter(words)
-
-            # Score sentences
             sentence_scores = {}
             for i, sentence in enumerate(sentences):
                 words_in_sentence = word_tokenize(sentence.lower())
                 score = sum(word_freq[word] for word in words_in_sentence if word in word_freq)
                 sentence_scores[i] = score
-
-            # Get top sentences
             top_sentences = sorted(sentence_scores.items(), key=lambda x: x[1], reverse=True)[:max_sentences]
             top_sentences = sorted([x[0] for x in top_sentences])
-
             return ' '.join([sentences[i] for i in top_sentences])
-
         except Exception as e:
             return text[:500] + "..." if len(text) > 500 else text
 
     def classify_topics(self, text):
-        """Classify text into topic categories"""
         text_lower = text.lower()
         topic_scores = {}
-
         for category, keywords in TOPIC_CATEGORIES.items():
             score = sum(1 for keyword in keywords if keyword in text_lower)
             if score > 0:
                 topic_scores[category] = score
-
-        # Return top 3 categories
         sorted_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)
         return [topic[0] for topic in sorted_topics[:3]] if sorted_topics else ['General']
 
     def process_newsletters(self, email_addresses, start_date, end_date):
-        """Process newsletters for given date range"""
         all_newsletters = []
-
         for email_address in email_addresses:
             st.write(f"Processing newsletters for {email_address}...")
             service = self.authenticate_gmail(email_address)
-
             if not service:
                 continue
-
             try:
-                # Build date query
                 query = f"after:{start_date.strftime('%Y/%m/%d')} before:{end_date.strftime('%Y/%m/%d')}"
-
-                # Get message list
                 results = service.users().messages().list(userId='me', q=query, maxResults=500).execute()
                 messages = results.get('messages', [])
-
                 progress_bar = st.progress(0)
-
                 for i, message in enumerate(messages):
                     try:
-                        # Get message details
                         msg = service.users().messages().get(userId='me', id=message['id'], format='full').execute()
-
-                        # Extract headers
                         headers = {}
                         for header in msg['payload'].get('headers', []):
                             headers[header['name']] = header['value']
-
-                        # Check if it's a newsletter
                         if self.is_newsletter(msg, headers):
-                            # Parse message
                             raw_msg = base64.urlsafe_b64decode(
                                 service.users().messages().get(
                                     userId='me', id=message['id'], format='raw'
                                 ).execute()['raw']
                             )
                             email_msg = email.message_from_bytes(raw_msg)
-
-                            # Extract content
                             content = self.extract_text_content(email_msg)
-
-                            if content and len(content) > 100:  # Only process substantial content
-                                # Summarize
+                            if content and len(content) > 100:
                                 summary = self.summarize_textrank(content)
-
-                                # Classify topics
                                 topics = self.classify_topics(content)
-
-                                # Get date
                                 date_str = headers.get('Date', '')
                                 try:
                                     email_date = email.utils.parsedate_to_datetime(date_str)
                                 except:
                                     email_date = datetime.now()
-
                                 newsletter_data = {
                                     'account': email_address,
                                     'sender': headers.get('From', 'Unknown'),
@@ -256,19 +209,13 @@ class NewsletterAgent:
                                     'topics': ', '.join(topics),
                                     'content_length': len(content)
                                 }
-
                                 all_newsletters.append(newsletter_data)
-
                         progress_bar.progress((i + 1) / len(messages))
-
                     except Exception as e:
                         st.write(f"Error processing message {i}: {str(e)}")
                         continue
-
             except Exception as e:
                 st.error(f"Error processing emails for {email_address}: {str(e)}")
-
-        # Sort by date
         all_newsletters.sort(key=lambda x: x['date'], reverse=True)
         return all_newsletters
 
@@ -279,22 +226,15 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded"
     )
-
     st.title("📧 Newsletter Summarizer & Tagger Agent")
     st.markdown("**Automatically detect, summarize, and tag newsletters from your Gmail accounts**")
-
-    # Sidebar for settings
     with st.sidebar:
         st.header("⚙️ Settings")
-
-        # Account selection
         st.subheader("📧 Email Accounts")
         selected_accounts = []
         for name, email in EMAIL_ACCOUNTS.items():
             if st.checkbox(f"{name} ({email})", value=True):
                 selected_accounts.append(email)
-
-        # Date range selection
         st.subheader("📅 Date Range")
         start_date = st.date_input(
             "Start Date",
@@ -306,31 +246,23 @@ def main():
             value=datetime.now(),
             max_value=datetime.now()
         )
-
         if start_date > end_date:
             st.error("Start date cannot be after end date")
             return
-
-    # Main content area
     col1, col2 = st.columns([2, 1])
-
     with col1:
         if st.button("🚀 Run Newsletter Agent", type="primary", use_container_width=True):
             if not selected_accounts:
                 st.error("Please select at least one email account")
                 return
-
             st.info("🔄 Processing newsletters... This may take a few minutes.")
-
             agent = NewsletterAgent()
             newsletters = agent.process_newsletters(selected_accounts, start_date, end_date)
-
             if newsletters:
                 st.success(f"✅ Found {len(newsletters)} newsletters!")
                 df = pd.DataFrame(newsletters)
                 df['date'] = pd.to_datetime(df['date'])
                 df = df.sort_values('date', ascending=False)
-
                 st.subheader("📊 Newsletter Summary")
                 col_metrics = st.columns(4)
                 with col_metrics[0]:
@@ -341,7 +273,6 @@ def main():
                     st.metric("Date Range", f"{len((end_date - start_date).days)} days")
                 with col_metrics[3]:
                     st.metric("Accounts Processed", len(selected_accounts))
-
                 st.subheader("🔍 Filter Results")
                 filter_col1, filter_col2 = st.columns(2)
                 with filter_col1:
@@ -389,7 +320,6 @@ def main():
                     )
             else:
                 st.warning("❌ No newsletters found for the selected criteria.")
-
     with col2:
         st.subheader("📝 Instructions")
         st.markdown("""
@@ -408,6 +338,5 @@ def main():
         - OAuth2 secure authentication
         - Processes data locally
         """)
-
 if __name__ == "__main__":
     main()
