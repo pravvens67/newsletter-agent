@@ -1,8 +1,9 @@
-google-auth-oauthlib>=1.0.0
-google-api-python-client
 streamlit
 pandas
 nltk
 beautifulsoup4
 html2text
 python-dateutil
+google-api-python-client
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2
