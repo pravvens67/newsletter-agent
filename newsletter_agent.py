@@ -81,7 +81,7 @@ class NewsletterAgent:
                     if os.path.exists(creds_path):
                         flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
                         # CHANGE: use run_console instead of run_local_server!
-                        creds = flow.run_console()
+                        creds = flow.run_local_server(port=0, open_browser=False)
                     else:
                         st.error("credentials.json file not found. Please upload your Gmail API credentials.")
                         return None
